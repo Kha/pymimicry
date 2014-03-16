@@ -1,5 +1,5 @@
 g(f(h(), a))
-g(f(aa, bb))
+g(f(h(), aa))
 # foo!
 
 [f(c, d)]
