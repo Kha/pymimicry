@@ -3,6 +3,8 @@
 import collections
 
 from rope.base.project import Project
+from rope.base import codeanalyze
+from rope.refactor import patchedast
 import ast
 
 def all_equal(values):
@@ -33,27 +35,26 @@ def windows(values, n=2):
         values = values[1:]
         yield window
 
-def wrap(value):
-    if isinstance(value, ast.AST) and not isinstance(value, ASTWrapper):
-        return ASTWrapper(value)
-    elif isinstance(value, list):
-        return map(wrap, value)
-    else:
-        return value
-
 class ASTWrapper(ast.AST):
     """ast.AST wrapper for more Pythonicity."""
-    def __init__(self, node):
-        object.__setattr__(self, '_node', node)
+    def __init__(self, node, source):
+        self._node = node
+        self._source = source
+        # override inherited empty ast.AST._fields
         self._fields = self._node._fields
+
+    def _wrap(self, value):
+        if isinstance(value, ast.AST) and not isinstance(value, ASTWrapper):
+            return ASTWrapper(value, self._source)
+        elif isinstance(value, list):
+            return map(self._wrap, value)
+        else:
+            return value
 
     def __getattr__(self, name):
         value = getattr(self._node, name)
-        setattr(self, name, value)
+        setattr(self, name, self._wrap(value))
         return getattr(self, name)
-
-    def __setattr__(self, name, value):
-        object.__setattr__(self, name, wrap(value))
 
     def __eq__(self, other):
         if isinstance(other, type(self)):
@@ -62,17 +63,10 @@ class ASTWrapper(ast.AST):
                     zip(self.child_nodes, other.child_nodes))
 
     def __repr__(self):
-        # shamelessly copied from ast.dump
-        def _format(node):
-            if isinstance(node, AST):
-                fields = [(a, _format(b)) for a, b in ast.iter_fields(node)]
-                return '%s(%s)' % (node.type.__name__, ', '.join(
-                    ('%s=%s' % field for field in fields)
-                ))
-            elif isinstance(node, list):
-                return '[%s]' % ', '.join(_format(x) for x in node)
-            return repr(node)
-        return _format(self)
+        return '<%s>' % str(self)
+
+    def __str__(self):
+        return self._source[self.region[0]:self.region[1]]
 
     @property
     def child_nodes(self):
@@ -85,10 +79,24 @@ class ASTWrapper(ast.AST):
     def of_class(self, class_):
         return self.type == class_
 
+    def get_patched_source(self, patches):
+        """Returns the original code with patches {node: new_text} applied.
+
+        >>> e = parse_expr('f(g(a))')
+        >>> e.args[0].get_patched_source({e.args[0].args[0]: 'b'})
+        'g(b)'
+        """
+        text_len_change = sum(len(new_text) - len(str(node))
+                              for node, new_text in patches.iteritems())
+        coll = codeanalyze.ChangeCollector(self._source)
+        for node, new_text in patches.iteritems():
+            coll.add_change(node.region[0], node.region[1], new_text)
+        return coll.get_changed()[self.region[0]:self.region[1]+text_len_change]
+
 AST = ASTWrapper
 
 def parse(source):
-    return ASTWrapper(ast.parse(source))
+    return ASTWrapper(patchedast.get_patched_ast(source), source)
 
 def parse_expr(source):
     return parse(source).body[0].value
@@ -129,8 +137,8 @@ def equal_node_structure(nodes):
 def find_change_context(old, new):
     """Finds the smallest context of a change.
 
-    'g(f(a, h()))', 'g(f(b, h()))' ~>
-    'f(a, h())', 'f(b, h())'
+    >>> find_change_context(*parse_exprs('g(f(a, h()))', 'g(f(b, h()))'))
+    (<f(a, h())>, <f(b, h())>)
     """
     if not equal_node_structure([old, new]):
         return old, new
@@ -155,26 +163,12 @@ class Template(collections.namedtuple('Template', ['node', 'holes'])):
     substituteable.
     >>> n = parse_expr('f(a, g())')
     >>> Template(n, [n.args[1]])
-    Call(func=Name(id='f', ctx=Load()), args=[Name(id='a', ctx=Load()), Name(id='$0', ctx=None)], keywords=[], starargs=None, kwargs=None)
+    <f(a, $0)>
     """
     def __repr__(self):
-        return repr(self.instantiate({
-            hole: ast.Name('$%d' % i, None) for i, hole in enumerate(self.holes)
-        }))
-
-    def instantiate(self, replacement):
-        """Replaces the template's holes with values in the given dict."""
-        assert len(replacement) == len(self.holes)
-        holes = self.holes
-
-        class Transformer(ast.NodeTransformer):
-            def visit(self, node):
-                if node in holes:
-                    return wrap(replacement[node])
-                else:
-                    return self.generic_visit(node)
-
-        return Transformer().visit(self.node)
+        return '<%s>' % self.node.get_patched_source({
+            hole: '$%d' % i for i, hole in enumerate(self.holes)
+        })
 
 def get_most_specific_template(nodes):
     """Gets the most specific template instantiable to all given nodes.
@@ -183,7 +177,7 @@ def get_most_specific_template(nodes):
     instantiated to t1 (plus the right set of holes).
 
     >>> get_most_specific_template(parse_exprs('f(a, b+1)', 'f(a, g())'))
-    Call(func=Name(id='f', ctx=Load()), args=[Name(id='a', ctx=Load()), Name(id='$0', ctx=None)], keywords=[], starargs=None, kwargs=None)
+    <f(a, $0)>
     """
     assert len(nodes) > 1
 
@@ -200,7 +194,7 @@ def get_most_specific_template(nodes):
 def main():
     proj = Project('test/')
     def get_ast(mod):
-        return wrap(proj.pycore.get_module(mod).get_ast())
+        return parse(proj.pycore.get_module(mod).source_code)
 
     edit_steps = ['a', 'b', 'c']
     contexts = [find_change_context(*win) for win in windows(map(get_ast, edit_steps))]
