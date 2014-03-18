@@ -5,6 +5,7 @@ import collections
 from rope.base.project import Project
 from rope.base import codeanalyze
 from rope.refactor import patchedast
+from rope.refactor import restructure
 import ast
 
 def all_equal(values):
@@ -55,6 +56,10 @@ class ASTWrapper(ast.AST):
         value = getattr(self._node, name)
         setattr(self, name, self._wrap(value))
         return getattr(self, name)
+
+    def __hash__(self):
+        # isn't necessarily equal on equal nodes, but good enough for now
+        return hash(str(self))
 
     def __eq__(self, other):
         if isinstance(other, type(self)):
@@ -191,6 +196,30 @@ def get_most_specific_template(nodes):
 
     return Template(nodes[0], get_holes(nodes))
 
+class RestructureParams(object):
+    """Parameters of the rope 'restructure' refactoring."""
+    def __init__(self, pattern, goal):
+        self.pattern = pattern
+        self.goal = goal
+
+    def __repr__(self):
+        return 'RestructureParams(%r, %r)' % (self.pattern, self.goal)
+
+def templates_to_restructure_params(old_template, new_template):
+    """Identifies equal holes in the templates and outputs everything in rope format."""
+    if not old_template.holes >= new_template.holes:
+        raise Exception('subexpressions only found in refactored code: %s' %
+                        (new_template.holes - old_template.holes))
+
+    var_names = {hole: '${%d}' % idx for idx, hole in enumerate(old_template.holes)}
+    return RestructureParams(
+        old_template.node.get_patched_source(var_names),
+        new_template.node.get_patched_source({
+            hole: var_names[hole]
+            for hole in new_template.holes
+        })
+    )
+
 def main():
     proj = Project('test/')
     def get_ast(mod):
@@ -199,8 +228,9 @@ def main():
     edit_steps = ['a', 'b', 'c']
     contexts = [find_change_context(*win) for win in windows(map(get_ast, edit_steps))]
     old_template, new_template = map(get_most_specific_template, transpose(contexts))
-    print(old_template)
-    print(new_template)
+    params = templates_to_restructure_params(old_template, new_template)
+    print(restructure.replace(proj.pycore.get_module('c').source_code,
+                              params.pattern, params.goal))
 
 
 if __name__ == '__main__':
