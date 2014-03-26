@@ -96,7 +96,8 @@ class ASTWrapper(ast.AST):
         coll = codeanalyze.ChangeCollector(self._source)
         for node, new_text in patches.iteritems():
             coll.add_change(node.region[0], node.region[1], new_text)
-        return coll.get_changed()[self.region[0]:self.region[1]+text_len_change]
+        changed_source = coll.get_changed() or self._source
+        return changed_source[self.region[0]:self.region[1]+text_len_change]
 
 AST = ASTWrapper
 
@@ -184,8 +185,6 @@ def get_most_specific_template(nodes):
     >>> get_most_specific_template(parse_exprs('f(a, b+1)', 'f(a, g())'))
     <f(a, $0)>
     """
-    assert len(nodes) > 1
-
     def get_holes(nodes):
         node = nodes[0]
 
@@ -220,18 +219,14 @@ def templates_to_restructure_params(old_template, new_template):
         })
     )
 
-def main():
-    proj = Project('test/')
-    def get_ast(mod):
-        return parse(proj.pycore.get_module(mod).source_code)
+class RestructureMimicry(object):
+    """Infers a restructure refactoring from a list of changes."""
+    def __init__(self):
+        self.changes = []
 
-    edit_steps = ['a', 'b', 'c']
-    contexts = [find_change_context(*win) for win in windows(map(get_ast, edit_steps))]
-    old_template, new_template = map(get_most_specific_template, transpose(contexts))
-    params = templates_to_restructure_params(old_template, new_template)
-    print(restructure.replace(proj.pycore.get_module('c').source_code,
-                              params.pattern, params.goal))
+    def add_change(self, old_text, new_text):
+        self.changes.append(find_change_context(parse(old_text), parse(new_text)))
 
-
-if __name__ == '__main__':
-    main()
+    def get_restructure_params(self):
+        old_template, new_template = map(get_most_specific_template, transpose(self.changes))
+        return templates_to_restructure_params(old_template, new_template)
