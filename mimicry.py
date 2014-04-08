@@ -38,15 +38,16 @@ def windows(values, n=2):
 
 class ASTWrapper(ast.AST):
     """ast.AST wrapper for more Pythonicity."""
-    def __init__(self, node, source):
+    def __init__(self, node, source, parent=None):
         self._node = node
         self._source = source
         # override inherited empty ast.AST._fields
         self._fields = self._node._fields
+        self.parent = parent
 
     def _wrap(self, value):
         if isinstance(value, ast.AST) and not isinstance(value, ASTWrapper):
-            return ASTWrapper(value, self._source)
+            return ASTWrapper(value, self._source, parent=self)
         elif isinstance(value, list):
             return map(self._wrap, value)
         else:
@@ -224,15 +225,33 @@ def templates_to_restructure_params(old_template, new_template):
         })
     )
 
+def zoom_out(expr, steps):
+    for _ in range(steps):
+        if not expr:
+            return None
+        expr = expr.parent
+    return expr
+
 class RestructureMimicry(object):
     """Infers a restructure refactoring from a list of changes."""
     def __init__(self):
-        self.changes = []
+        self._changes = []
+        self.more_context = 0
 
     def add_change(self, old_text, new_text):
-        ctx = find_change_context(parse(old_text), parse(new_text))
-        if ctx:
-            self.changes.append(ctx)
+        try:
+            ctx = find_change_context(parse(old_text), parse(new_text))
+        except SyntaxError:
+            return
+        else:
+            if ctx:
+                self._changes.append(ctx)
+
+    @property
+    def changes(self):
+        return [(zoom_out(old, self.more_context),
+                 zoom_out(new, self.more_context))
+                for old, new in self._changes]
 
     def get_restructure_params(self):
         old_template, new_template = map(get_most_specific_template, transpose(self.changes))

@@ -20,6 +20,8 @@ function! s:Refresh()
 		nnoremap <script> <silent> <buffer> p :call mimicry#PreviewChanges()<CR>
 		nnoremap <script> <silent> <buffer> c :call mimicry#PerformChanges()<CR>
 		nnoremap <script> <silent> <buffer> u :call mimicry#PopChange()<CR>
+		nnoremap <script> <silent> <buffer> - :python vimmimicry.zoom_out(-1)<CR>
+		nnoremap <script> <silent> <buffer> + :python vimmimicry.zoom_out(+1)<CR>
 		wincmd p
 	endif
 	python vimmimicry.refresh_output()

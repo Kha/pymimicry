@@ -48,7 +48,8 @@ def refresh_output():
 
     _output_text(["\" p to preview changes",
                   "\" c to commit changes",
-                  "\" u to forget last recorded change"] + output + [""] +
+                  "\" u to forget last recorded change",
+                  "\" +/- to increase/decrease the change context"] + output + [""] +
                  ["%2d. %s -> %s" % (idx+1, format_code(old), format_code(new))
                   for idx, (old, new) in enumerate(_mimicry.changes)])
 
@@ -78,5 +79,9 @@ def preview_changes():
         print('No changes!')
 
 def pop_change():
-    if _mimicry.changes:
-        _mimicry.changes.pop()
+    if _mimicry._changes:
+        _mimicry._changes.pop()
+
+def zoom_out(steps):
+    _mimicry.more_context += steps
+    refresh_output()
