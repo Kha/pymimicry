@@ -2,6 +2,7 @@ function! s:Refresh()
 	let existing_buffer = bufnr("__Mimicry__")
 	if existing_buffer == -1
 		botright new __Mimicry__
+		setlocal previewwindow
 		setlocal buftype=nofile
 		setlocal bufhidden=hide
 		setlocal noswapfile
@@ -18,6 +19,7 @@ function! s:Refresh()
 
 		nnoremap <script> <silent> <buffer> p :call mimicry#PreviewChanges()<CR>
 		nnoremap <script> <silent> <buffer> c :call mimicry#PerformChanges()<CR>
+		wincmd p
 	endif
 	python vimmimicry.refresh_output()
 endfunction

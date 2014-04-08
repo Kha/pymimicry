@@ -18,10 +18,12 @@ def _goto_window_for_buffer_name(bn):
     return _goto_window_for_buffer(b)
 
 def _output_text(lines):
+    current_window = vim.eval('winnr()')
     _goto_window_for_buffer_name('__Mimicry__')
     vim.command('setlocal modifiable')
     vim.current.buffer[:] = lines
     vim.command('setlocal nomodifiable')
+    vim.command('%swincmd w' % current_window)
 
 def from_undo_step():
     """Appends the changes the last edit has introduced."""
