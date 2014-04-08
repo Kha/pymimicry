@@ -37,11 +37,14 @@ def refresh_output():
     params = _mimicry.get_restructure_params()
 
     _output_text([
+        "\" p to preview changes",
+        "\" c to commit changes",
+        "\" u to forget last recorded change",
         "pattern: %s" % params.pattern,
         "goal:    %s" % params.goal,
-        "\" p to preview changes",
-        "\" c to commit changes"
-    ])
+        ""
+    ] + ["%2d. %s -> %s" % (idx+1, old, new)
+         for idx, (old, new) in enumerate(_mimicry.changes)])
 
 _refactoring = ropemode.refactor.Restructure(ropevim._interface, ropevim._env)
 
@@ -67,3 +70,7 @@ def preview_changes():
         print(changes.get_description())
     else:
         print('No changes!')
+
+def pop_change():
+    if _mimicry.changes:
+        _mimicry.changes.pop()

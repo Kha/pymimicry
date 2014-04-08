@@ -12,13 +12,14 @@ function! s:Refresh()
 		setlocal nonumber
 		setlocal norelativenumber
 		setlocal nowrap
-		resiz 5
+		resiz 10
 
 		let b:current_syntax = 'mimicry'
 		syn match Comment '\v^".*$'
 
 		nnoremap <script> <silent> <buffer> p :call mimicry#PreviewChanges()<CR>
 		nnoremap <script> <silent> <buffer> c :call mimicry#PerformChanges()<CR>
+		nnoremap <script> <silent> <buffer> u :call mimicry#PopChange()<CR>
 		wincmd p
 	endif
 	python vimmimicry.refresh_output()
@@ -35,6 +36,11 @@ endfunction
 
 function! mimicry#PerformChanges()
 	python vimmimicry.perform_changes()
+endfunction
+
+function! mimicry#PopChange()
+	python vimmimicry.pop_change()
+	call s:Refresh()
 endfunction
 
 if !has('python')
