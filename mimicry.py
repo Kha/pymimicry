@@ -195,6 +195,9 @@ def get_most_specific_template(nodes):
 
     return Template(nodes[0], get_holes(nodes))
 
+class NoRestructuringError(Exception):
+    pass
+
 class RestructureParams(object):
     """Parameters of the rope 'restructure' refactoring."""
     def __init__(self, pattern, goal):
@@ -207,8 +210,10 @@ class RestructureParams(object):
 def templates_to_restructure_params(old_template, new_template):
     """Identifies equal holes in the templates and outputs everything in rope format."""
     if not old_template.holes >= new_template.holes:
-        raise Exception('subexpressions only found in refactored code: %s' %
-                        (new_template.holes - old_template.holes))
+        raise NoRestructuringError(
+            'subexpressions only found in refactored code: %s' %
+            ', '.join(map(str, new_template.holes - old_template.holes))
+        )
 
     var_names = {hole: '${%d}' % idx for idx, hole in enumerate(old_template.holes)}
     return RestructureParams(
@@ -225,7 +230,9 @@ class RestructureMimicry(object):
         self.changes = []
 
     def add_change(self, old_text, new_text):
-        self.changes.append(find_change_context(parse(old_text), parse(new_text)))
+        ctx = find_change_context(parse(old_text), parse(new_text))
+        if ctx:
+            self.changes.append(ctx)
 
     def get_restructure_params(self):
         old_template, new_template = map(get_most_specific_template, transpose(self.changes))

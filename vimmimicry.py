@@ -34,17 +34,23 @@ def from_undo_step():
     _mimicry.add_change(old_text, new_text)
 
 def refresh_output():
-    params = _mimicry.get_restructure_params()
+    try:
+        params = _mimicry.get_restructure_params()
+        output = ["pattern: %s" % params.pattern,
+                  "goal:    %s" % params.goal]
+    except mimicry.NoRestructuringError as e:
+        output = ["<ERROR: %s>" % e.message]
 
-    _output_text([
-        "\" p to preview changes",
-        "\" c to commit changes",
-        "\" u to forget last recorded change",
-        "pattern: %s" % params.pattern,
-        "goal:    %s" % params.goal,
-        ""
-    ] + ["%2d. %s -> %s" % (idx+1, old, new)
-         for idx, (old, new) in enumerate(_mimicry.changes)])
+    def format_code(code):
+        # TODO: Do something more sensible with multiline output... if we want
+        # it at all
+        return str(code).replace("\n", "\\n")
+
+    _output_text(["\" p to preview changes",
+                  "\" c to commit changes",
+                  "\" u to forget last recorded change"] + output + [""] +
+                 ["%2d. %s -> %s" % (idx+1, format_code(old), format_code(new))
+                  for idx, (old, new) in enumerate(_mimicry.changes)])
 
 _refactoring = ropemode.refactor.Restructure(ropevim._interface, ropevim._env)
 
