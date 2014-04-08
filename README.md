@@ -1,4 +1,4 @@
-PyMimicry is a vim plugin that infers [rope 'Restructure refactorings](http://rope.sourceforge.net/overview.html#restructurings) from your changes to a file.
+PyMimicry is a vim plugin that infers [rope 'Restructure refactorings'](http://rope.sourceforge.net/overview.html#restructurings) from your changes to a file.
 
 # Installation #
 PyMimicry depends on ropevim:
